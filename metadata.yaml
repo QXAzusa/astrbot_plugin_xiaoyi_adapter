@@ -1,0 +1,9 @@
+name: XiaoYi_Adapter
+display_name: XiaoYi Adapter
+author: QXAzusa, ChatGPT 5
+description: Minimal XiaoYi AstrBot platform adapter using WebSocket AK/SK auth. Supports text, image receive, text/image reply, and incremental artifact updates.
+short_desc: Connect AstrBot to XiaoYi A2A over WebSocket.
+version: 0.1.0
+repo: https://github.com/QXAzusa/astrbot_plugin_xiaoyi_adapter
+astrbot_version: ">=4.25"
+
