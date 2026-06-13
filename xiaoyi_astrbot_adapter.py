@@ -34,7 +34,7 @@ class XiaoYiAstrBotAdapter(Platform):
         self.client: Optional[XiaoYiClient] = None
         self._running = False
         self._validate_config(platform_config)
-
+        logger.info("[XiaoYi Adapter] 初始化完成")
     def _validate_config(self, config: dict) -> None:
         required = ("ak", "sk", "agentId")
         for key in required:
