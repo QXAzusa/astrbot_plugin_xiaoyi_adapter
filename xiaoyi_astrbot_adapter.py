@@ -25,6 +25,7 @@ from .xiaoyi_config import CONFIG_METADATA, DEFAULT_CONFIG_TMPL, I18N_RESOURCES
     i18n_resources=I18N_RESOURCES,
     support_streaming_message=True,
     adapter_display_name="XiaoYi",
+    logo_path="logo.png"
 )
 class XiaoYiAstrBotAdapter(Platform):
     def __init__(self, platform_config: dict, platform_settings: dict, event_queue: asyncio.Queue):
