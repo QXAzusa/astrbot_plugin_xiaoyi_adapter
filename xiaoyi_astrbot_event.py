@@ -1,5 +1,4 @@
 import asyncio
-from pathlib import Path
 from typing import Any
 
 from astrbot.api import logger
@@ -10,10 +9,7 @@ from astrbot.api.platform import AstrBotMessage, PlatformMetadata
 from .xiaoyi_client import XiaoYiClient
 
 
-def _read_file_bytes(path: str) -> bytes:
-    with open(path, "rb") as file_obj:
-        return file_obj.read()
-
+UNSUPPORTED_MESSAGE_NOTICE = "尚未支持该类型消息"
 
 class XiaoYiAstrBotEvent(AstrMessageEvent):
     def __init__(
@@ -40,7 +36,6 @@ class XiaoYiAstrBotEvent(AstrMessageEvent):
         self._final_sent = False
         self._push_summary_text = ""
         self._accumulated_text = ""
-        self._pending_extra_parts: list[dict[str, Any]] = []
         self._latest_task_id: str | None = None
         self._latest_request_id: str | None = None
 
@@ -74,8 +69,14 @@ class XiaoYiAstrBotEvent(AstrMessageEvent):
             final_parts: list[dict[str, Any]] = []
             if self._accumulated_text:
                 final_parts.append({"kind": "text", "text": self._accumulated_text})
-            final_parts.extend(self._pending_extra_parts)
 
+            await self.client.send_status_update(
+                session_id=self.session_id,
+                task_id=task_id,
+                request_id=request_id,
+                text="任务处理已完成~",
+                state="completed",
+            )
             if final_parts:
                 await self.client.send_artifact_update(
                     session_id=self.session_id,
@@ -98,7 +99,16 @@ class XiaoYiAstrBotEvent(AstrMessageEvent):
                         text=self._push_summary_text,
                         title=self._push_summary_text.splitlines()[0][:57],
                     )
-                self._pending_extra_parts = []
+            else:
+                await self.client.send_artifact_update(
+                    session_id=self.session_id,
+                    task_id=task_id,
+                    request_id=request_id,
+                    parts=[{"kind": "text", "text": ""}],
+                    append=False,
+                    final=True,
+                )
+                self._final_sent = True
         except asyncio.CancelledError:
             raise
 
@@ -113,7 +123,7 @@ class XiaoYiAstrBotEvent(AstrMessageEvent):
 
         chain = message.chain if isinstance(message, MessageChain) else message
         plain_parts: list[str] = []
-        extra_parts: list[dict[str, Any]] = []
+        ignored_non_text_found = False
 
         for item in chain:
             if isinstance(item, Plain):
@@ -121,71 +131,48 @@ class XiaoYiAstrBotEvent(AstrMessageEvent):
                     plain_parts.append(item.text)
                 continue
 
-            if isinstance(item, Image):
-                if getattr(item, "url", None):
-                    extra_parts.append(
-                        self.client.build_file_part_from_url(
-                            item.url,
-                            mime_type="image/png",
-                            file_name=Path(item.url.split("?", 1)[0]).name or "image.png",
-                        )
-                    )
-                elif getattr(item, "path", None):
-                    try:
-                        raw = await asyncio.to_thread(_read_file_bytes, item.path)
-                    except Exception as exc:
-                        logger.error(f"Failed to read local image for XiaoYi reply: {exc}")
-                    else:
-                        extra_parts.append(
-                            self.client.build_file_part_from_bytes(
-                                raw,
-                                file_name=Path(item.path).name or "image.png",
-                                mime_type="image/png",
-                            )
-                        )
-                elif getattr(item, "raw", None):
-                    extra_parts.append(
-                        self.client.build_file_part_from_bytes(
-                            item.raw,
-                            file_name="image.png",
-                            mime_type="image/png",
-                        )
-                    )
+            if type(item) is Image:
+                logger.info(
+                    "XiaoYi outbound ignored Image component: session=%s task=%s item=%s",
+                    self.session_id,
+                    self._latest_task_id or self.session_id,
+                    item,
+                )
+                ignored_non_text_found = True
                 continue
 
             if hasattr(item, "reasoning_text") and isinstance(item.reasoning_text, str):
-                extra_parts.append(self.client.build_reasoning_text_part(item.reasoning_text))
                 continue
-
-            if hasattr(item, "command"):
-                command = getattr(item, "command")
-                if isinstance(command, dict):
-                    extra_parts.append(self.client.build_command_part(command))
-                    continue
-
-            if hasattr(item, "data"):
-                data = getattr(item, "data")
-                if isinstance(data, dict):
-                    extra_parts.append(self.client.build_data_part(data))
-                    continue
 
             if hasattr(item, "text") and isinstance(getattr(item, "text"), str):
                 plain_parts.append(getattr(item, "text"))
                 continue
 
+            ignored_non_text_found = True
+            logger.info(
+                "XiaoYi outbound ignored non-text component: session=%s task=%s type=%s",
+                self.session_id,
+                self._latest_task_id or self.session_id,
+                item.__class__.__name__,
+            )
+
+        if ignored_non_text_found and not plain_parts:
+            logger.info(
+                "XiaoYi outbound ignored non-text-only reply: session=%s",
+                self.session_id,
+            )
+            plain_parts = [UNSUPPORTED_MESSAGE_NOTICE]
+
         raw_text = "".join(plain_parts)
         text = raw_text if raw_text.strip() else ""
+        logger.info(
+            "XiaoYi outbound send prepared: session=%s text_len=%s ignored_non_text=%s",
+            self.session_id,
+            len(text),
+            ignored_non_text_found,
+        )
         if text:
             self._accumulated_text += text
-            self._push_summary_text = self._accumulated_text
-
-        if extra_parts:
-            self._pending_extra_parts.extend(extra_parts)
-
-        if not self._accumulated_text and not self._pending_extra_parts:
-            self._accumulated_text = (
-                "[AstrBot returned a non-text response that this XiaoYi adapter could not serialize.]"
-            )
             self._push_summary_text = self._accumulated_text
 
         task_id, request_id = self._resolve_ids()
@@ -199,12 +186,4 @@ class XiaoYiAstrBotEvent(AstrMessageEvent):
             except asyncio.CancelledError:
                 pass
 
-        if text:
-            await self.client.send_stream_text(
-                session_id=self.session_id,
-                task_id=task_id,
-                request_id=request_id,
-                text=text,
-                append=True,
-            )
         self._finalize_task = asyncio.create_task(self._schedule_finalize(task_id, request_id))
