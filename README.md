@@ -1,6 +1,6 @@
 # 小艺 AstrBot 适配器
 
-本目录包含一个独立的 AstrBot 插件，用于将小艺 OpenClaw 类型通道接入 AstrBot 平台适配器体系，实现小艺协议与 AstrBot 消息模型之间的双向转换与桥接。
+用于将小艺 OpenClaw 类型通道接入 AstrBot 平台适配器体系的插件，实现小艺协议与 AstrBot 消息模型之间的双向转换与桥接。
 
 ## 配置方法
 
