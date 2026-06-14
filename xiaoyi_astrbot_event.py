@@ -120,6 +120,7 @@ class XiaoYiAstrBotEvent(AstrMessageEvent):
                 self.session_id,
             )
             return
+        self._has_send_oper = True
 
         chain = message.chain if isinstance(message, MessageChain) else message
         plain_parts: list[str] = []
