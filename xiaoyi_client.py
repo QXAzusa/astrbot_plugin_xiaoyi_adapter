@@ -17,6 +17,7 @@ import aiohttp
 DEFAULT_WS_URL = "wss://hag.cloud.huawei.com/openclaw/v1/ws/link"
 DEFAULT_WS_URL_2 = "wss://116.63.174.231/openclaw/v1/ws/link"
 DEFAULT_PUSH_URL = "https://hag.cloud.huawei.com/open-ability-agent/v1/agent-webhook"
+PERSISTED_PUSH_ID_FILE = Path(__file__).resolve().parent / ".data" / "session_push_ids.json"
 
 
 class XiaoYiClient:
@@ -75,6 +76,54 @@ class XiaoYiClient:
         self._session_push_id_map: dict[str, str] = {}
         self._session_last_seen_at: dict[str, float] = {}
         self._session_cleanup_tasks: dict[str, asyncio.Task] = {}
+        self._persisted_push_id_file = PERSISTED_PUSH_ID_FILE
+        self._load_persisted_push_ids()
+
+    def _load_persisted_push_ids(self) -> None:
+        try:
+            if not self._persisted_push_id_file.exists():
+                return
+            raw = json.loads(self._persisted_push_id_file.read_text(encoding="utf-8"))
+            if not isinstance(raw, dict):
+                self.logger.warning(
+                    "XiaoYi push id cache is invalid, expected object: %s",
+                    self._persisted_push_id_file,
+                )
+                return
+            loaded = 0
+            for session_id, push_id in raw.items():
+                if isinstance(session_id, str) and isinstance(push_id, str) and session_id and push_id.strip():
+                    self._session_push_id_map[session_id] = push_id.strip()
+                    loaded += 1
+            if loaded:
+                self.logger.info("XiaoYi restored %s persisted session push id(s)", loaded)
+        except Exception as exc:
+            self.logger.warning("XiaoYi failed to load persisted push ids: %s", exc)
+
+    def _save_persisted_push_ids(self) -> None:
+        try:
+            self._persisted_push_id_file.parent.mkdir(parents=True, exist_ok=True)
+            payload = {
+                session_id: push_id
+                for session_id, push_id in self._session_push_id_map.items()
+                if session_id and push_id
+            }
+            self._persisted_push_id_file.write_text(
+                json.dumps(payload, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+        except Exception as exc:
+            self.logger.warning("XiaoYi failed to persist push ids: %s", exc)
+
+    def _update_session_push_id(self, session_id: str, push_id: str) -> None:
+        normalized_push_id = push_id.strip()
+        if not session_id or not normalized_push_id:
+            return
+        previous = self._session_push_id_map.get(session_id)
+        self._session_push_id_map[session_id] = normalized_push_id
+        if previous != normalized_push_id:
+            self.logger.info("XiaoYi cached push_id for session %s", session_id)
+            self._save_persisted_push_ids()
 
     def _build_headers(self) -> dict[str, str]:
         ts = str(int(time.time() * 1000))
@@ -136,7 +185,6 @@ class XiaoYiClient:
 
     def _clear_session_state(self, session_id: str) -> None:
         self._session_server_map.pop(session_id, None)
-        self._session_push_id_map.pop(session_id, None)
         self._session_last_seen_at.pop(session_id, None)
         cleanup_task = self._session_cleanup_tasks.pop(session_id, None)
         if cleanup_task:
@@ -278,7 +326,7 @@ class XiaoYiClient:
                                     self._session_server_map[session_id] = server_id
                                     push_id = self._extract_push_id(payload)
                                     if push_id:
-                                        self._session_push_id_map[session_id] = push_id
+                                        self._update_session_push_id(session_id, push_id)
 
                                 await self.on_message(payload)
                             elif msg.type == aiohttp.WSMsgType.ERROR:

@@ -1,8 +1,9 @@
 import astrbot.api.message_components as Comp
 from astrbot.api import logger
-from astrbot.api.event import AstrMessageEvent, filter
 from astrbot.api import star
+from astrbot.api.event import AstrMessageEvent, filter
 from astrbot.api.star import Context, Star
+from astrbot.core.platform.message_session import MessageSession
 
 
 UNSUPPORTED_MESSAGE_NOTICE = "尚未支持该类型消息"
@@ -27,6 +28,37 @@ class XiaoYiPlugin(Star):
     @filter.on_astrbot_loaded()
     async def on_astrbot_loaded(self):
         logger.info("XiaoYiPlugin on_astrbot_loaded fired; hooks should now be active")
+
+    @filter.command("pushid")
+    async def show_push_id(self, event: AstrMessageEvent):
+        """输出当前会话缓存的 push_id。"""
+        from .xiaoyi_astrbot_adapter import get_active_xiaoyi_client
+
+        client = get_active_xiaoyi_client()
+        if not client:
+            yield event.plain_result("XiaoYi client 未运行，暂时无法读取 push_id。")
+            return
+
+        session_id = event.session_id
+        if not session_id:
+            try:
+                session = MessageSession.from_str(event.unified_msg_origin)
+                session_id = session.session_id
+            except Exception:
+                session_id = ""
+
+        if not session_id:
+            yield event.plain_result("当前会话缺少 session_id，无法读取 push_id。")
+            return
+
+        push_id = client.get_push_id(session_id)
+        if not push_id:
+            yield event.plain_result(
+                f"当前会话 `{session_id}` 暂未缓存 push_id，请先确认小艺开发后台已启用该系统变量。"
+            )
+            return
+
+        yield event.plain_result(f"session_id: {session_id}\npush_id: {push_id}")
 
     @filter.on_decorating_result(priority=100)
     async def normalize_xiaoyi_result(self, event: AstrMessageEvent):
