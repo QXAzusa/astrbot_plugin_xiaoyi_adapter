@@ -1,4 +1,4 @@
-# 小艺 AstrBot 适配器
+# AstrBot XiaoYi(OpenClaw) Adapter (astrbot_plugin_xiaoyi_adapter)
 
 把小艺 OpenClaw 通道接入 AstrBot ，用于处理基础对话。
 
