@@ -7,6 +7,11 @@ from astrbot.core.platform.message_session import MessageSession
 
 
 UNSUPPORTED_MESSAGE_NOTICE = "尚未支持该类型消息"
+_ACTIVE_PLUGIN_CONTEXT: Context | None = None
+
+
+def get_active_plugin_context() -> Context | None:
+    return _ACTIVE_PLUGIN_CONTEXT
 
 
 @star.register(
@@ -18,6 +23,8 @@ UNSUPPORTED_MESSAGE_NOTICE = "尚未支持该类型消息"
 class XiaoYiPlugin(Star):
     def __init__(self, context: Context):
         super().__init__(context)
+        global _ACTIVE_PLUGIN_CONTEXT
+        _ACTIVE_PLUGIN_CONTEXT = context
         logger.info("XiaoYiPlugin initialized; result hooks are being registered")
         try:
             from . import xiaoyi_astrbot_adapter  # noqa: F401

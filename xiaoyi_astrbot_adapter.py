@@ -13,7 +13,10 @@ from astrbot.api.platform import (
     register_platform_adapter,
 )
 from astrbot.core.platform.astr_message_event import MessageSesion
+from astrbot.core.platform.message_session import MessageSession
+from astrbot.core.utils.active_event_registry import active_event_registry
 
+from .main import get_active_plugin_context
 from .xiaoyi_astrbot_event import UNSUPPORTED_MESSAGE_NOTICE, XiaoYiAstrBotEvent
 from .xiaoyi_client import DEFAULT_WS_URL, XiaoYiClient
 from .xiaoyi_config import CONFIG_METADATA, DEFAULT_CONFIG_TMPL, I18N_RESOURCES
@@ -23,6 +26,52 @@ _ACTIVE_XIAOYI_CLIENT: XiaoYiClient | None = None
 
 def get_active_xiaoyi_client() -> XiaoYiClient | None:
     return _ACTIVE_XIAOYI_CLIENT
+
+
+async def _reset_astrbot_session(session_id: str, platform_id: str) -> None:
+    context = get_active_plugin_context()
+    if context is None:
+        logger.warning(
+            "[XiaoYi Adapter] clearContext received for session %s but plugin context is unavailable",
+            session_id,
+        )
+        return
+
+    umo = str(MessageSession(platform_id, MessageType.FRIEND_MESSAGE, session_id))
+
+    try:
+        active_event_registry.stop_all(umo)
+
+        cfg = context.get_config(umo=umo)
+        agent_runner_type = cfg.get("provider_settings", {}).get("agent_runner_type", "")
+
+        from astrbot.builtin_stars.builtin_commands.commands.conversation import (
+            THIRD_PARTY_AGENT_RUNNER_KEY,
+            _clear_third_party_agent_runner_state,
+        )
+
+        if agent_runner_type in THIRD_PARTY_AGENT_RUNNER_KEY:
+            await _clear_third_party_agent_runner_state(
+                context,
+                umo,
+                agent_runner_type,
+            )
+        else:
+            cid = await context.conversation_manager.get_curr_conversation_id(umo)
+            if cid:
+                await context.conversation_manager.update_conversation(umo, cid, [])
+
+        logger.info(
+            "[XiaoYi Adapter] clearContext synced to AstrBot reset: session=%s umo=%s",
+            session_id,
+            umo,
+        )
+    except Exception as exc:
+        logger.warning(
+            "[XiaoYi Adapter] failed to sync clearContext to AstrBot reset: session=%s error=%s",
+            session_id,
+            exc,
+        )
 
 
 @register_platform_adapter(
@@ -178,6 +227,7 @@ class XiaoYiAstrBotAdapter(Platform):
             if session_id and self.client:
                 await self.client.send_clear_context_response(session_id, payload["id"])
                 self.client.mark_session_for_cleanup(session_id)
+                await _reset_astrbot_session(session_id, self.meta().id or "xiaoyi")
             return
 
         if method in {"tasks/cancel", "tasks_cancel"}:
