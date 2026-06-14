@@ -1,8 +1,8 @@
-name: XiaoYi_Adapter
+name: astrbot_plugin_xiaoyi_adapter
 display_name: 小艺 OpenClaw Adapter
 author: QXAzusa, GPT
 desc: 将小艺 OpenClaw 类型通道接入 AstrBot 平台适配器体系
-version: 0.0.3
+version: 0.0.4
 repo: https://github.com/QXAzusa/astrbot_plugin_xiaoyi_adapter
 # astrbot_version: ">=4.25"
 

@@ -2,39 +2,21 @@ DEFAULT_CONFIG_TMPL: dict = {
     "id": "default",
     "type": "xiaoyi",
     "enable": False,
-    "wsUrl": "wss://hag.cloud.huawei.com/openclaw/v1/ws/link",
-    "wsUrl2": "wss://116.63.174.231/openclaw/v1/ws/link",
     "ak": "",
     "sk": "",
     "agentId": "",
-    "apiId": "",
-    "pushId": "",
-    "pushUrl": "https://hag.cloud.huawei.com/open-ability-agent/v1/agent-webhook",
-    "pushEnabled": False,
-    "pushDefaultMode": "push_only_for_async",
     "sendProcessingStatus": True,
     "streamFinalizeDelayMs": 10000,
-    "pushOnFinal": False,
     "sessionCleanupDelayMs": 300000,
     "sessionStateTtlMs": 3600000,
 }
 
 
 CONFIG_METADATA: dict = {
-    "wsUrl": {
-        "description": "WebSocket 地址",
-        "type": "string",
-        "hint": "小艺 A2A WebSocket 接入地址。",
-    },
     "ak": {
         "description": "Access Key",
         "type": "string",
         "hint": "必填。小艺侧分配的 Access Key。",
-    },
-    "wsUrl2": {
-        "description": "备用 WebSocket 地址",
-        "type": "string",
-        "hint": "选填。用于备用小艺接入地址。",
     },
     "sk": {
         "description": "Secret Key",
@@ -56,36 +38,6 @@ CONFIG_METADATA: dict = {
         "type": "int",
         "hint": "最后一个增量分片发送后，延迟多久自动补发 final 收尾包。建议不要低于 5000，否则同一轮多段回复可能被过早结束。",
     },
-    "apiId": {
-        "description": "Push API ID",
-        "type": "string",
-        "hint": "选填。启用小艺 webhook 推送时需要提供。",
-    },
-    "pushId": {
-        "description": "默认 Push ID",
-        "type": "string",
-        "hint": "选填。当当前会话里没有 push_id 时，作为默认推送目标使用。",
-    },
-    "pushUrl": {
-        "description": "Push Webhook 地址",
-        "type": "string",
-        "hint": "选填。用于覆盖默认的小艺 Push Webhook 地址。",
-    },
-    "pushEnabled": {
-        "description": "启用 Push Webhook",
-        "type": "bool",
-        "hint": "启用可选的小艺 webhook 推送补充链路。",
-    },
-    "pushDefaultMode": {
-        "description": "Push 默认模式",
-        "type": "string",
-        "hint": "建议填写 `websocket_first` 或 `push_only_for_async`。",
-    },
-    "pushOnFinal": {
-        "description": "最终回复后触发 Push",
-        "type": "bool",
-        "hint": "启用后，会在流式最终回复结束后额外发送一条小艺 webhook 推送。",
-    },
     "sessionCleanupDelayMs": {
         "description": "Session 清理延迟（毫秒）",
         "type": "int",
@@ -101,17 +53,9 @@ CONFIG_METADATA: dict = {
 
 I18N_RESOURCES: dict = {
     "zh-CN": {
-        "wsUrl": {
-            "description": "WebSocket 地址",
-            "hint": "小艺 A2A WebSocket 接入地址。",
-        },
         "ak": {
             "description": "Access Key",
             "hint": "必填。小艺侧分配的 Access Key。",
-        },
-        "wsUrl2": {
-            "description": "备用 WebSocket 地址",
-            "hint": "选填。用于高可用的备用小艺接入地址。",
         },
         "sk": {
             "description": "Secret Key",
@@ -128,30 +72,6 @@ I18N_RESOURCES: dict = {
         "streamFinalizeDelayMs": {
             "description": "流式收尾延迟（毫秒）",
             "hint": "最后一个增量分片发送后，延迟多久自动补发 final 收尾包。",
-        },
-        "apiId": {
-            "description": "Push API ID",
-            "hint": "选填。启用小艺 webhook 推送时需要提供。",
-        },
-        "pushId": {
-            "description": "默认 Push ID",
-            "hint": "选填。当当前会话里没有 push_id 时，作为默认推送目标使用。",
-        },
-        "pushUrl": {
-            "description": "Push Webhook 地址",
-            "hint": "选填。用于覆盖默认的小艺 Push Webhook 地址。",
-        },
-        "pushEnabled": {
-            "description": "启用 Push Webhook",
-            "hint": "启用可选的小艺 webhook 推送补充链路。",
-        },
-        "pushDefaultMode": {
-            "description": "Push 默认模式",
-            "hint": "建议填写 `websocket_first` 或 `push_only_for_async`。",
-        },
-        "pushOnFinal": {
-            "description": "最终回复后触发 Push",
-            "hint": "启用后，会在流式最终回复结束后额外发送一条小艺 webhook 推送。",
         },
         "sessionCleanupDelayMs": {
             "description": "Session 清理延迟（毫秒）",

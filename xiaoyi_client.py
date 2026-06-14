@@ -13,11 +13,26 @@ from urllib.parse import urlparse
 
 import aiohttp
 
+try:
+    from astrbot.api.star import StarTools
+except ImportError:  # pragma: no cover - fallback for non-AstrBot runtime
+    StarTools = None
+
 
 DEFAULT_WS_URL = "wss://hag.cloud.huawei.com/openclaw/v1/ws/link"
 DEFAULT_WS_URL_2 = "wss://116.63.174.231/openclaw/v1/ws/link"
 DEFAULT_PUSH_URL = "https://hag.cloud.huawei.com/open-ability-agent/v1/agent-webhook"
-PERSISTED_PUSH_ID_FILE = Path(__file__).resolve().parent / ".data" / "session_push_ids.json"
+PLUGIN_NAME = "astrbot_plugin_xiaoyi_adapter"
+LEGACY_PERSISTED_PUSH_ID_FILE = Path(__file__).resolve().parent / ".data" / "session_push_ids.json"
+
+
+def resolve_persisted_push_id_file() -> Path:
+    if StarTools is not None:
+        try:
+            return StarTools.get_data_dir(PLUGIN_NAME) / "session_push_ids.json"
+        except Exception:
+            pass
+    return LEGACY_PERSISTED_PUSH_ID_FILE
 
 
 class XiaoYiClient:
@@ -76,7 +91,7 @@ class XiaoYiClient:
         self._session_push_id_map: dict[str, str] = {}
         self._session_last_seen_at: dict[str, float] = {}
         self._session_cleanup_tasks: dict[str, asyncio.Task] = {}
-        self._persisted_push_id_file = PERSISTED_PUSH_ID_FILE
+        self._persisted_push_id_file = resolve_persisted_push_id_file()
         self._load_persisted_push_ids()
 
     def _load_persisted_push_ids(self) -> None:
@@ -413,13 +428,39 @@ class XiaoYiClient:
         self._session_last_seen_at.clear()
         self._session_cleanup_tasks.clear()
 
-    def is_push_configured(self) -> bool:
-        return bool(self.api_id and self.ak and self.sk and (self.default_push_id or self._session_push_id_map))
+    def is_push_configured(self, session_id: str | None = None) -> bool:
+        return bool(
+            self.api_id
+            and self.ak
+            and self.sk
+            and self.get_push_id(session_id).strip()
+        )
 
     def get_push_id(self, session_id: str | None = None) -> str:
         if session_id:
             return self._session_push_id_map.get(session_id, "") or self.default_push_id
         return self.default_push_id
+
+    def get_push_config_diagnostics(self, session_id: str | None = None) -> dict[str, Any]:
+        session_push_id = self._session_push_id_map.get(session_id or "", "") if session_id else ""
+        effective_push_id = self.get_push_id(session_id).strip()
+        return {
+            "has_api_id": bool(self.api_id),
+            "has_ak": bool(self.ak),
+            "has_sk": bool(self.sk),
+            "has_default_push_id": bool(self.default_push_id.strip()),
+            "has_session_push_id": bool(session_push_id.strip()),
+            "effective_push_id_source": (
+                "session"
+                if session_push_id.strip()
+                else "default"
+                if self.default_push_id.strip()
+                else "none"
+            ),
+            "is_push_configured": bool(
+                self.api_id and self.ak and self.sk and effective_push_id
+            ),
+        }
 
     async def send_push_notification(
         self,

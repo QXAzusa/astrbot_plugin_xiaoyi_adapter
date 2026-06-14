@@ -15,10 +15,10 @@ def get_active_plugin_context() -> Context | None:
 
 
 @star.register(
-    "xiaoyi_adapter",
+    "astrbot_plugin_xiaoyi_adapter",
     "QXAzusa, GPT",
     "将小艺 OpenClaw 类型通道接入 AstrBot 平台适配器体系",
-    "0.0.2",
+    "0.0.4",
 )
 class XiaoYiPlugin(Star):
     def __init__(self, context: Context):

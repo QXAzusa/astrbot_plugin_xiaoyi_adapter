@@ -21,20 +21,13 @@ class XiaoYiAstrBotEvent(AstrMessageEvent):
         client: XiaoYiClient,
         raw_payload: dict[str, Any],
         stream_finalize_delay_ms: int = 800,
-        push_enabled: bool = False,
-        push_default_mode: str = "push_only_for_async",
-        push_on_final: bool = False,
     ) -> None:
         super().__init__(message_str, message_obj, platform_meta, session_id)
         self.client = client
         self.raw_payload = raw_payload
         self.stream_finalize_delay_ms = stream_finalize_delay_ms
-        self.push_enabled = push_enabled
-        self.push_default_mode = push_default_mode
-        self.push_on_final = push_on_final
         self._finalize_task: asyncio.Task | None = None
         self._final_sent = False
-        self._push_summary_text = ""
         self._accumulated_text = ""
         self._latest_task_id: str | None = None
         self._latest_request_id: str | None = None
@@ -87,18 +80,6 @@ class XiaoYiAstrBotEvent(AstrMessageEvent):
                     final=True,
                 )
                 self._final_sent = True
-                if (
-                    self.push_enabled
-                    and self.push_default_mode == "websocket_first"
-                    and self.push_on_final
-                    and self.client.is_push_configured()
-                    and self._push_summary_text
-                ):
-                    await self.client.send_push_notification(
-                        session_id=self.session_id,
-                        text=self._push_summary_text,
-                        title=self._push_summary_text.splitlines()[0][:57],
-                    )
             else:
                 await self.client.send_artifact_update(
                     session_id=self.session_id,
@@ -174,7 +155,6 @@ class XiaoYiAstrBotEvent(AstrMessageEvent):
         )
         if text:
             self._accumulated_text += text
-            self._push_summary_text = self._accumulated_text
 
         task_id, request_id = self._resolve_ids()
         self._latest_task_id = task_id

@@ -12,13 +12,12 @@ from astrbot.api.platform import (
     PlatformMetadata,
     register_platform_adapter,
 )
-from astrbot.core.platform.astr_message_event import MessageSesion
 from astrbot.core.platform.message_session import MessageSession
 from astrbot.core.utils.active_event_registry import active_event_registry
 
 from .main import get_active_plugin_context
-from .xiaoyi_astrbot_event import UNSUPPORTED_MESSAGE_NOTICE, XiaoYiAstrBotEvent
-from .xiaoyi_client import DEFAULT_WS_URL, XiaoYiClient
+from .xiaoyi_astrbot_event import XiaoYiAstrBotEvent
+from .xiaoyi_client import XiaoYiClient
 from .xiaoyi_config import CONFIG_METADATA, DEFAULT_CONFIG_TMPL, I18N_RESOURCES
 
 _ACTIVE_XIAOYI_CLIENT: XiaoYiClient | None = None
@@ -76,13 +75,13 @@ async def _reset_astrbot_session(session_id: str, platform_id: str) -> None:
 
 @register_platform_adapter(
     "xiaoyi",
-    "XiaoYi adapter",
+    "小艺",
     default_config_tmpl=DEFAULT_CONFIG_TMPL,
     config_metadata=CONFIG_METADATA,
     i18n_resources=I18N_RESOURCES,
     support_streaming_message=True,
-    adapter_display_name="XiaoYi",
-    logo_path="logo.png"
+    adapter_display_name="小艺",
+    logo_path="platform_logo.png"
 )
 class XiaoYiAstrBotAdapter(Platform):
     def __init__(self, platform_config: dict, platform_settings: dict, event_queue: asyncio.Queue):
@@ -102,79 +101,12 @@ class XiaoYiAstrBotAdapter(Platform):
     def meta(self) -> PlatformMetadata:
         return PlatformMetadata(
             name="xiaoyi",
-            description="XiaoYi Adapter",
+            description="小艺",
             id=self.config.get("id"),
-            adapter_display_name="XiaoYi",
-            support_proactive_message=True,
+            adapter_display_name="小艺",
+            logo_path="platform_logo.png",
+            support_proactive_message=False,
         )
-
-    async def send_by_session(
-        self,
-        session: MessageSesion,
-        message_chain: MessageChain,
-    ) -> None:
-        if not self.client:
-            logger.warning("[XiaoYi Adapter] proactive send skipped: client not running")
-            return
-
-        if not self.client.is_push_configured():
-            logger.warning(
-                "[XiaoYi Adapter] proactive send skipped: push not configured for session %s",
-                session.session_id,
-            )
-            return
-
-        chain = message_chain.chain if isinstance(message_chain, MessageChain) else message_chain
-        plain_parts: list[str] = []
-        ignored_non_text_found = False
-
-        for item in chain:
-            if isinstance(item, Plain):
-                if item.text:
-                    plain_parts.append(item.text)
-                continue
-
-            if isinstance(item, Image):
-                ignored_non_text_found = True
-                plain_parts.append("[Image]")
-                continue
-
-            if hasattr(item, "text") and isinstance(getattr(item, "text"), str):
-                plain_parts.append(getattr(item, "text"))
-                continue
-
-            ignored_non_text_found = True
-            plain_parts.append(f"[{item.__class__.__name__}]")
-
-        text = "".join(plain_parts).strip()
-        if not text and ignored_non_text_found:
-            text = UNSUPPORTED_MESSAGE_NOTICE
-        if not text:
-            logger.info(
-                "[XiaoYi Adapter] proactive send ignored empty message for session %s",
-                session.session_id,
-            )
-            return
-
-        title = text.splitlines()[0][:57]
-        sent = await self.client.send_push_notification(
-            session_id=session.session_id,
-            text=text,
-            title=title,
-        )
-        if not sent:
-            logger.warning(
-                "[XiaoYi Adapter] proactive push failed for session %s",
-                session.session_id,
-            )
-            return
-
-        logger.info(
-            "[XiaoYi Adapter] proactive push sent: session=%s text_len=%s",
-            session.session_id,
-            len(text),
-        )
-        await super().send_by_session(session, message_chain)
 
     async def shutdown(self):
         global _ACTIVE_XIAOYI_CLIENT
@@ -196,14 +128,11 @@ class XiaoYiAstrBotAdapter(Platform):
             await self._handle_payload(data)
 
         self.client = XiaoYiClient(
-            ws_url=self.config.get("wsUrl", DEFAULT_WS_URL),
-            ws_url2=self.config.get("wsUrl2") or None,
+            ws_url="",
+            ws_url2=None,
             ak=self.config["ak"],
             sk=self.config["sk"],
             agent_id=self.config["agentId"],
-            api_id=self.config.get("apiId") or None,
-            push_id=self.config.get("pushId") or None,
-            push_url=self.config.get("pushUrl") or None,
             session_cleanup_delay_ms=int(self.config.get("sessionCleanupDelayMs", 300000)),
             session_state_ttl_ms=int(self.config.get("sessionStateTtlMs", 3600000)),
             on_message=on_received,
@@ -311,8 +240,5 @@ class XiaoYiAstrBotAdapter(Platform):
             client=self.client,
             raw_payload=message.raw_message,
             stream_finalize_delay_ms=max(5000, int(self.config.get("streamFinalizeDelayMs", 5000))),
-            push_enabled=bool(self.config.get("pushEnabled", False)),
-            push_default_mode=str(self.config.get("pushDefaultMode", "push_only_for_async")),
-            push_on_final=bool(self.config.get("pushOnFinal", False)),
         )
         self.commit_event(event)
